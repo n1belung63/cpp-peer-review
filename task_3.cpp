@@ -26,14 +26,14 @@ vector<Person> LoadPersons(const DBParameters& db_pars, const PersonFilterParame
         return {};
     }
 
-    const DBQuery query = [&person_pars, &db] {
+    const DBQuery query = std::invoke([&person_pars, &db] {
         ostringstream query_str;
         query_str << "from Persons "s
                 << "select Name, Age "s
                 << "where Age between "s << person_pars.min_age << " and "s << person_pars.max_age << " "s
                 << "and Name like '%"s << db.Quote(person_pars.name_filter) << "%'"s;
         return DBQuery(query_str.str());
-    }(); 
+    });
 
     vector<Person> persons;
     for (auto [name, age] : db.LoadRows<string, int>(query)) {
@@ -46,16 +46,6 @@ vector<Person> LoadPersons(const DBParameters& db_pars, const PersonFilterParame
 ** 2. CheckDateTimeValidity.cpp **
 *********************************/
 
-enum class DateTimeErrorCode {
-    Ok,
-    YearOutOfRange,
-    MonthOutOfRange,
-    DayOutOfRange,
-    HourOutOfRange,
-    MinuteOutOfRange,
-    SecondOutOfRange
-};
-
 struct DateTime {
     int year;
     int month;
@@ -65,59 +55,48 @@ struct DateTime {
     int second;
 };
 
-DateTimeErrorCode CheckDateTimeValidity(const DateTime& dt) {
-    const int MAX_YEAR = 9999;
-    const int MIN_YEAR = 1;
 
-    const int MAX_MONTH = 12;
-    const int MIN_MONTH = 1;
+void CheckDateTimeFieldValidity(const std::string& dt_name, int dt, int dt_min, int dt_max) {
+    if (dt < dt_min) {
+        throw domain_error(dt_name + " is too small"s);
+    }
 
-    const int MAX_MONTH = 12;
-    const int MIN_MONTH = 1;
+    if (dt > dt_max) {
+        throw domain_error(dt_name + " is too big"s);
+    }
+}
+
+void CheckDateTimeValidity(const DateTime& dt) {
+    static const int MAX_YEAR = 9999;
+    static const int MIN_YEAR = 1;
+
+    static const int MAX_MONTH = 12;
+    static const int MIN_MONTH = 1;
 
     auto MAX_DAY {
         [](int year, int month) {
             const bool is_leap_year = (year % 4 == 0) && !(year % 100 == 0 && year % 400 != 0);
-            const array month_lengths = {31, 28 + is_leap_year, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+            const std::array month_lengths = {31, 28 + is_leap_year, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
             return month_lengths[month - 1];
         }
     };
-    const int MIN_DAY = 1;
+    static const int MIN_DAY = 1;
 
-    const int MAX_HOUR = 23;
-    const int MIN_HOUR = 0;
+    static const int MAX_HOUR = 23;
+    static const int MIN_HOUR = 0;
 
-    const int MAX_MINUTE = 59;
-    const int MIN_MINUTE = 0;
+    static const int MAX_MINUTE = 59;
+    static const int MIN_MINUTE = 0;
 
-    const int MAX_SECOND = 59;
-    const int MIN_SECOND = 0;
+    static const int MAX_SECOND = 59;
+    static const int MIN_SECOND = 0;
 
-    if (dt.year < MIN_YEAR || dt.year > MAX_YEAR) {
-        return DateTimeErrorCode::YearOutOfRange;
-    }
-
-    if (dt.month < MIN_MONTH || dt.month > MAX_MONTH) {
-        return DateTimeErrorCode::MonthOutOfRange;
-    }
-
-    if (dt.day < MIN_DAY || dt.day > MAX_DAY(dt.year, dt.month)) {
-        return DateTimeErrorCode::DayOutOfRange;
-    }
-
-    if (dt.hour < MIN_HOUR || dt.hour > MAX_HOUR) {
-        return DateTimeErrorCode::HourOutOfRange;
-    }
-
-    if (dt.minute < MIN_MINUTE || dt.minute > MAX_MINUTE) {
-        return DateTimeErrorCode::MinuteOutOfRange;
-    }
-
-    if (dt.second < MIN_SECOND || dt.second > MAX_SECOND) {
-        return DateTimeErrorCode::SecondOutOfRange;
-    }
-
-    return DateTimeErrorCode::Ok;
+    CheckDateTimeFieldValidity("year"s, dt.year, MIN_YEAR, MAX_YEAR);
+    CheckDateTimeFieldValidity("month"s, dt.month, MIN_MONTH, MAX_MONTH);
+    CheckDateTimeFieldValidity("day"s, dt.day, MIN_DAY, MAX_DAY(dt.year, dt.month));
+    CheckDateTimeFieldValidity("hour"s, dt.hour, MIN_HOUR, MAX_HOUR);
+    CheckDateTimeFieldValidity("minute"s, dt.minute, MIN_MINUTE, MAX_MINUTE);
+    CheckDateTimeFieldValidity("second"s, dt.second, MIN_SECOND, MAX_SECOND);
 }
 
 /****************************
